@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Manager</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f8f7f4; --surface: #ffffff; --border: #e5e3dc;
+      --text: #1a1a18; --muted: #6b6a65; --accent: #4f46e5;
+      --accent-light: #eef2ff; --danger: #dc2626; --danger-light: #fef2f2;
+      --success: #16a34a; --success-light: #f0fdf4;
+      --warning: #d97706; --warning-light: #fffbeb;
+    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 15px; line-height: 1.6; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+    header h1 { font-size: 17px; font-weight: 600; }
+    #api-status { font-size: 13px; color: var(--muted); }
+    main { max-width: 900px; margin: 0 auto; padding: 28px 24px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+    .stat-card .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .stat-card .value { font-size: 24px; font-weight: 600; }
+    .toolbar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .toolbar input, .toolbar select { height: 38px; border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; font-size: 14px; background: var(--surface); color: var(--text); outline: none; }
+    .toolbar input { flex: 1; min-width: 180px; }
+    .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+    .btn { height: 38px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; font-weight: 500; cursor: pointer; background: var(--surface); color: var(--text); transition: background 0.15s; }
+    .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .btn-sm { height: 30px; padding: 0 12px; font-size: 13px; }
+    .tasks-list { display: flex; flex-direction: column; gap: 10px; }
+    .task-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; display: flex; align-items: flex-start; gap: 14px; }
+    .task-card.done { opacity: 0.6; }
+    .task-card.done .task-title { text-decoration: line-through; }
+    .task-main { flex: 1; min-width: 0; }
+    .task-title { font-weight: 500; font-size: 15px; margin-bottom: 4px; }
+    .task-desc { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .task-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 500; }
+    .badge-pending { background: var(--warning-light); color: var(--warning); }
+    .badge-in-progress { background: var(--accent-light); color: var(--accent); }
+    .badge-done { background: var(--success-light); color: var(--success); }
+    .badge-high { background: var(--danger-light); color: var(--danger); }
+    .badge-medium { background: var(--warning-light); color: var(--warning); }
+    .badge-low { background: var(--success-light); color: var(--success); }
+    .task-date { font-size: 12px; color: var(--muted); }
+    .task-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty p { font-size: 15px; }
+    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+    .modal-bg.open { display: flex; }
+    .modal { background: var(--surface); border-radius: 14px; padding: 28px; width: 100%; max-width: 480px; margin: 16px; }
+    .modal h2 { font-size: 17px; margin-bottom: 20px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--muted); }
+    .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
+    .form-group textarea { resize: vertical; min-height: 80px; }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--accent); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a18; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 14px; opacity: 0; transform: translateY(8px); transition: all 0.25s; pointer-events: none; z-index: 999; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    #error-banner { background: var(--danger-light); color: var(--danger); border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; display: none; }
+    #error-banner.show { display: block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Task Manager</h1>
+  <span id="api-status">Connecting...</span>
+</header>
+
+<main>
+  <div id="error-banner"></div>
+
+  <div class="stats">
+    <div class="stat-card"><div class="label">Total</div><div class="value" id="stat-total">—</div></div>
+    <div class="stat-card"><div class="label">Pending</div><div class="value" id="stat-pending">—</div></div>
+    <div class="stat-card"><div class="label">In progress</div><div class="value" id="stat-inprogress">—</div></div>
+    <div class="stat-card"><div class="label">Done</div><div class="value" id="stat-done">—</div></div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="Search tasks..." oninput="renderTasks()" />
+    <select id="filter-status" onchange="renderTasks()">
+      <option value="">All statuses</option>
+      <option value="pending">Pending</option>
+      <option value="in-progress">In progress</option>
+      <option value="done">Done</option>
+    </select>
+    <select id="filter-priority" onchange="renderTasks()">
+      <option value="">All priorities</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+    <button class="btn btn-primary" onclick="openModal()">+ New task</button>
+  </div>
+
+  <div class="tasks-list" id="tasks-list">
+    <div class="empty"><p>Loading...</p></div>
+  </div>
+</main>
+
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="modal-title">New task</h2>
+    <div class="form-group">
+      <label>Title *</label>
+      <input type="text" id="f-title" placeholder="What needs to be done?" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="f-desc" placeholder="Optional details..."></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Status</label>
+        <select id="f-status">
+          <option value="pending">Pending</option>
+          <option value="in-progress">In progress</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Priority</label>
+        <select id="f-priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTask()" id="save-btn">Create task</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const API = '';
+  let tasks = [];
+  let editingId = null;
+
+  async function fetchTasks() {
+    try {
+      const res = await fetch(`${API}/tasks`);
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      tasks = json.data;
+      updateStats();
+      renderTasks();
+      document.getElementById('api-status').textContent = 'Connected';
+      document.getElementById('error-banner').classList.remove('show');
+    } catch {
+      document.getElementById('api-status').textContent = 'Offline';
+      const b = document.getElementById('error-banner');
+      b.textContent = 'Cannot reach the server. Make sure Docker is running.';
+      b.classList.add('show');
+    }
+  }
+
+  function updateStats() {
+    document.getElementById('stat-total').textContent = tasks.length;
+    document.getElementById('stat-pending').textContent = tasks.filter(t => t.status === 'pending').length;
+    document.getElementById('stat-inprogress').textContent = tasks.filter(t => t.status === 'in-progress').length;
+    document.getElementById('stat-done').textContent = tasks.filter(t => t.status === 'done').length;
+  }
+
+  function renderTasks() {
+    const search = document.getElementById('search').value.toLowerCase();
+    const sf = document.getElementById('filter-status').value;
+    const pf = document.getElementById('filter-priority').value;
+    const filtered = tasks.filter(t =>
+      (!search || t.title.toLowerCase().includes(search) || (t.description||'').toLowerCase().includes(search)) &&
+      (!sf || t.status === sf) &&
+      (!pf || t.priority === pf)
+    );
+    const list = document.getElementById('tasks-list');
+    if (!filtered.length) {
+      list.innerHTML = `<div class="empty"><p>${tasks.length === 0 ? 'No tasks yet. Create your first one!' : 'No tasks match your filters.'}</p></div>`;
+      return;
+    }
+    list.innerHTML = filtered.map(t => `
+      <div class="task-card ${t.status === 'done' ? 'done' : ''}">
+        <div class="task-main">
+          <div class="task-title">${esc(t.title)}</div>
+          ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ''}
+          <div class="task-meta">
+            <span class="badge badge-${t.status}">${t.status}</span>
+            <span class="badge badge-${t.priority}">${t.priority}</span>
+            <span class="task-date">${new Date(t.createdAt).toLocaleDateString()}</span>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="btn btn-sm" onclick="openModal('${t._id}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteTask('${t._id}')">Delete</button>
+        </div>
+      </div>`).join('');
+  }
+
+  function openModal(id = null) {
+    editingId = id;
+    document.getElementById('modal-title').textContent = id ? 'Edit task' : 'New task';
+    document.getElementById('save-btn').textContent = id ? 'Save changes' : 'Create task';
+    if (id) {
+      const t = tasks.find(t => t._id === id);
+      document.getElementById('f-title').value = t.title;
+      document.getElementById('f-desc').value = t.description || '';
+      document.getElementById('f-status').value = t.status;
+      document.getElementById('f-priority').value = t.priority;
+    } else {
+      document.getElementById('f-title').value = '';
+      document.getElementById('f-desc').value = '';
+      document.getElementById('f-status').value = 'pending';
+      document.getElementById('f-priority').value = 'medium';
+    }
+    document.getElementById('modal-bg').classList.add('open');
+    setTimeout(() => document.getElementById('f-title').focus(), 50);
+  }
+
+  function closeModal() {
+    document.getElementById('modal-bg').classList.remove('open');
+    editingId = null;
+  }
+
+  async function saveTask() {
+    const title = document.getElementById('f-title').value.trim();
+    if (!title) { document.getElementById('f-title').focus(); return; }
+    const body = {
+      title,
+      description: document.getElementById('f-desc').value.trim(),
+      status: document.getElementById('f-status').value,
+      priority: document.getElementById('f-priority').value,
+    };
+    try {
+      const url = editingId ? `/tasks/${editingId}` : '/tasks';
+      const method = editingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+      closeModal();
+      await fetchTasks();
+      toast(editingId ? 'Task updated!' : 'Task created!');
+    } catch (e) { toast('Error: ' + e.message); }
+  }
+
+  async function deleteTask(id) {
+    if (!confirm('Delete this task?')) return;
+    try {
+      const res = await fetch(`/tasks/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      await fetchTasks();
+      toast('Task deleted');
+    } catch { toast('Error deleting task'); }
+  }
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Enter' && document.getElementById('modal-bg').classList.contains('open') && document.activeElement.tagName !== 'TEXTAREA') saveTask();
+  });
+
+  fetchTasks();
+  setInterval(fetchTasks, 30000);
+</script>
+</body>
+</html>
